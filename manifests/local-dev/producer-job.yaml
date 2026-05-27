@@ -1,0 +1,24 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: redis-producer
+  namespace: worker-scaler
+spec:
+  ttlSecondsAfterFinished: 10
+  template:
+    metadata:
+      labels:
+        app: redis-producer
+        namespace: worker-scaler
+    spec:
+      containers:
+        - name: producer
+          image: local/redis-producer:v1
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: REDIS_ADDR
+              value: "redis:6379"
+            - name: PRODUCER_DELAY
+              value: "100ms"
+      restartPolicy: Never
+  backoffLimit: 2

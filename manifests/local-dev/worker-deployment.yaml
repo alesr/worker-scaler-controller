@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-worker
+  namespace: worker-scaler
+  labels:
+    app: redis-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis-worker
+  terminationGracePeriodSeconds: 60
+  template:
+    metadata:
+      namespace: worker-scaler
+      labels:
+        app: redis-worker
+    spec:
+      containers:
+        - name: worker
+          image: local/redis-worker:v1
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: REDIS_ADDR
+              value: "redis:6379"
+          resources:
+            limits:
+              memory: "128Mi"
+              cpu: "250m"
+
+          livenessProbe:
+            exec:
+              command: ["/bin/true"] # todo: implement healthcheck
+            initialDelaySeconds: 5
+            periodSeconds: 10
