@@ -1,7 +1,7 @@
 github.com/alesr/workerpool v1.0.0 h1:gZI7T7npXiD8RnD7WHFzR3FszYkiVVMpC/O6YqOhKnk=
 github.com/alesr/workerpool v1.0.0/go.mod h1:FEAxA4neUreRIYou11sl9x2Cmys+Ah7YDl+2vefEv2Q=
-github.com/alesr/workerpool/adapters/redisstream v0.0.0-20260527005828-a86a93d89108 h1:37Px3bv7vkRI3Slxyqz8MA9Odh/Fx1eY3SE8HTBfrxw=
-github.com/alesr/workerpool/adapters/redisstream v0.0.0-20260527005828-a86a93d89108/go.mod h1:pV2tYNbGGM0b9aGFUd1yEtZr0ruqcwctxib5JR6gYqc=
+github.com/alesr/workerpool/adapters/redisstreams v0.0.0-20260527180839-781a462fcf7b h1:eqTHQtPd0A/LugXfjrGp7u7D6zBCGwcxKwao+QjtOQM=
+github.com/alesr/workerpool/adapters/redisstreams v0.0.0-20260527180839-781a462fcf7b/go.mod h1:804p0GlFNqydBN/mYTKyEfrskj9zxWFO16mmzavxGRY=
 github.com/bsm/ginkgo/v2 v2.12.0 h1:Ny8MWAHyOepLGlLKYmXG4IEkioBysk6GpaRTLC8zwWs=
 github.com/bsm/ginkgo/v2 v2.12.0/go.mod h1:SwYbGRRDovPVboqFv0tPTcG1sN61LM1Z4ARdbAV9g4c=
 github.com/bsm/gomega v1.27.10 h1:yeMWxP2pV2fG3FgAODIY8EiRE3dy0aeFYt4l7wh6yKA=

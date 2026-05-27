@@ -10,7 +10,7 @@ import (
 	"github.com/alesr/worker-scaler-controller/internal/pkg/logutil"
 	"github.com/alesr/worker-scaler-controller/internal/worker"
 	"github.com/alesr/workerpool"
-	redisadapter "github.com/alesr/workerpool/adapters/redisstream"
+	redisadapter "github.com/alesr/workerpool/adapters/redisstreams"
 	"github.com/caarlos0/env/v11"
 	"github.com/redis/go-redis/v9"
 )
