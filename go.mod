@@ -7,6 +7,7 @@ require (
 	github.com/alesr/workerpool/adapters/redisstreams v0.0.0-20260527180839-781a462fcf7b
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/redis/go-redis/v9 v9.19.0
+	k8s.io/api v0.30.1
 	k8s.io/apimachinery v0.30.1
 	k8s.io/client-go v0.30.1
 )

@@ -16,10 +16,12 @@ import (
 )
 
 type config struct {
-	RedisAddr  string `env:"REDIS_ADDR" envDefault:"localhost:6379"`
-	StreamName string `env:"STREAM_NAME" envDefault:"orders_stream"`
-	GroupName  string `env:"GROUP_NAME" envDefault:"image_processors"`
-	ConsumerID string `env:"CONSUMER_ID"`
+	RedisAddr         string `env:"REDIS_ADDR" envDefault:"localhost:6379"`
+	StreamName        string `env:"STREAM_NAME" envDefault:"orders_stream"`
+	GroupName         string `env:"GROUP_NAME" envDefault:"image_processors"`
+	ConsumerID        string `env:"CONSUMER_ID"`
+	WorkerConcurrency int    `env:"WORKER_CONCURRENCY" envDefault:"10"`
+	PoolBufferSize    int    `env:"POOL_BUFFER_SIZE" envDefault:"100"`
 }
 
 func main() {
@@ -47,7 +49,7 @@ func main() {
 	rdb := redis.NewClient(&redis.Options{Addr: cfg.RedisAddr})
 	defer rdb.Close()
 
-	pool := workerpool.New[worker.WorkerTask](ctx, 3, workerpool.WithBuffer[worker.WorkerTask](100))
+	pool := workerpool.New(ctx, cfg.WorkerConcurrency, workerpool.WithBuffer[worker.WorkerTask](cfg.PoolBufferSize))
 
 	adapter := redisadapter.NewStreamAdapter(
 		rdb,
