@@ -1,98 +1,84 @@
-IMAGE_REGISTRY ?= local
-IMAGE_TAG      ?= v1
-
+IMAGE_TAG      := $(shell date +%s)
+IMAGE_REGISTRY := docker.io/alesr
+TARGET_ARCH    := linux/arm64
+NAMESPACE      := worker-scaler
+PROJECT_NAME   := worker-scaler-controller
 DOCKER         := docker
 KUBECTL        := kubectl
-
-PROJECT_NAME := worker-scaler-controller
 
 .PHONY: help
 help: ## Show this help message
 	@echo "------------------------------------------------------------------------"
-	@echo "${PROJECT_NAME}"
+	@echo "${PROJECT_NAME} (Target: Raspberry Pi ARM64 | Namespace: ${NAMESPACE})"
 	@echo "------------------------------------------------------------------------"
 	@awk 'BEGIN {FS = ":.*?## "}; $$0 ~ "^[[:alnum:]_/%-]+:.*?## " {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST) | sort
 
 .PHONY: fmt
 fmt: ## Format code
-		go fmt ./...
+	go fmt ./...
 
 .PHONY: vet
 vet: ## Vet code
-		go vet ./...
+	go vet ./...
 
 .PHONY: test
 test: ## Run unit tests
-		go test -short -race -count=1 -v ./...
+	go test -short -race -count=1 -v ./...
 
 .PHONY: lint
 lint: vet ## Lint code
-		@if command -v staticcheck >/dev/null 2>&1; then \
-			staticcheck ./...; \
-		else \
-			echo "staticcheck not installed, skipping (go install honnef.co/go/tools/cmd/staticcheck@latest)"; \
-		fi
+	@if command -v staticcheck >/dev/null 2>&1; then \
+		staticcheck ./...; \
+	else \
+		echo "staticcheck not installed, skipping (go install honnef.co/go/tools/cmd/staticcheck@latest)"; \
+	fi
+
+.PHONY: create-namespace
+create-namespace: ## Create the namespace
+	$(KUBECTL) apply -f manifests/namespace.yaml
 
 .PHONY: build-producer
-build-producer: ## Build the producer container image
-	$(DOCKER) build -f build/Dockerfile --target producer -t $(IMAGE_REGISTRY)/redis-producer:$(IMAGE_TAG) .
+build-producer: ## Build the producer image
+	$(DOCKER) build --platform $(TARGET_ARCH) -f build/Dockerfile --target producer -t $(IMAGE_REGISTRY)/redis-producer:$(IMAGE_TAG) .
 
 .PHONY: build-worker
-build-worker: ## Build the worker container image
-	$(DOCKER) build -f build/Dockerfile --target worker -t $(IMAGE_REGISTRY)/redis-worker:$(IMAGE_TAG) .
+build-worker: ## Build the worker image
+	$(DOCKER) build --platform $(TARGET_ARCH) -f build/Dockerfile --target worker -t $(IMAGE_REGISTRY)/redis-worker:$(IMAGE_TAG) .
 
 .PHONY: build-controller
-build-controller: ## Build the scaler controller container image
-	$(DOCKER) build -f build/Dockerfile --target controller -t $(IMAGE_REGISTRY)/scaler-controller:$(IMAGE_TAG) .
+build-controller: ## Build the scaler controller image
+	$(DOCKER) build --platform $(TARGET_ARCH) -f build/Dockerfile --target controller -t $(IMAGE_REGISTRY)/scaler-controller:$(IMAGE_TAG) .
 
 .PHONY: build-all
-build-all: build-producer build-worker build-controller ## Build producer, worker, and controller images
+build-all: build-producer build-worker build-controller #£ Build all images
 
-.PHONY: load-producer
-load-producer: build-producer ## Build and load the producer image straight into kind cache
-	kind load docker-image $(IMAGE_REGISTRY)/redis-producer:$(IMAGE_TAG) --name worker-scaler
-
-.PHONY: load-worker
-load-worker: build-worker ## Build and load the worker image straight into kind cache
-	kind load docker-image $(IMAGE_REGISTRY)/redis-worker:$(IMAGE_TAG) --name worker-scaler
-
-.PHONY: load-controller
-load-controller: build-controller ## Build and load the controller image straight into kind cache
-	kind load docker-image $(IMAGE_REGISTRY)/scaler-controller:$(IMAGE_TAG) --name worker-scaler
-
-.PHONY: load-all
-load-all: load-producer load-worker load-controller ## Build and load all images into the kind cluster
+.PHONY: push-all
+push-all: build-all ## Build and push all images
+	$(DOCKER) push $(IMAGE_REGISTRY)/redis-producer:$(IMAGE_TAG)
+	$(DOCKER) push $(IMAGE_REGISTRY)/redis-worker:$(IMAGE_TAG)
+	$(DOCKER) push $(IMAGE_REGISTRY)/scaler-controller:$(IMAGE_TAG)
 
 .PHONY: deploy-redis
-deploy-redis: ## Apply the Redis deployment and service manifests
-	$(KUBECTL) apply -f manifests/local-dev/redis.yaml
+deploy-redis: create-namespace ## Deploy Redis to the Pi cluster
+	$(KUBECTL) apply -n $(NAMESPACE) -f manifests/redis-service.yaml
+	$(KUBECTL) apply -n $(NAMESPACE) -f manifests/redis-deployment.yaml
 
 .PHONY: deploy-worker
-deploy-worker: load-worker ## Build, load, and apply the worker deployment
-	$(KUBECTL) apply -f manifests/local-dev/worker-deployment.yaml
+deploy-worker: create-namespace ## Deploy the Worker pool to the Pi cluster
+	sed -i '' 's|image: .*/redis-worker:.*|image: $(IMAGE_REGISTRY)/redis-worker:$(IMAGE_TAG)|g' manifests/worker-deployment.yaml
+	$(KUBECTL) apply -n $(NAMESPACE) -f manifests/worker-deployment.yaml
+	$(KUBECTL) rollout restart deployment/redis-worker -n $(NAMESPACE)
 
 .PHONY: deploy-controller
-deploy-controller: load-controller ## Build, load, and apply the controller deployment and RBAC rules
-	$(KUBECTL) apply -f manifests/local-dev/controller.yaml
-
-.PHONY: delete-worker
-delete-worker: ## Delete the worker deployment
-	$(KUBECTL) delete -f manifests/local-dev/worker-deployment.yaml --ignore-not-found=true
+deploy-controller: create-namespace ## Deploy the Custom Controller + RBAC to the Pi cluster
+	$(KUBECTL) apply -n $(NAMESPACE) -f manifests/controller-rbac.yaml
+	sed -i '' 's|image: .*/scaler-controller:.*|image: $(IMAGE_REGISTRY)/scaler-controller:$(IMAGE_TAG)|g' manifests/controller-deployment.yaml
+	$(KUBECTL) apply -n $(NAMESPACE) -f manifests/controller-deployment.yaml
+	$(KUBECTL) rollout restart deployment/scaler-controller -n $(NAMESPACE)
 
 .PHONY: deploy-all
-deploy-all: deploy-redis deploy-worker ## Deploy Redis and the Worker
+deploy-all: push-all deploy-redis deploy-worker deploy-controller ## Deploy all images
 
-.PHONY: run-producer
-run-producer: load-producer ## Run the producer Job inside kind
-	-$(KUBECTL) delete -f manifests/local-dev/producer-job.yaml -n worker-scaler 2>/dev/null || true
-	$(KUBECTL) apply -f manifests/local-dev/producer-job.yaml
-
-.PHONY: run-controller
-run-controller: ## Run the scaler controller locally against the active kubeconfig context
-	go run ./cmd/controller/main.go
-
-.PHONY: clean
-clean: ## Delete local host docker images generated by this Makefile
-	-$(DOCKER) rmi $(IMAGE_REGISTRY)/redis-producer:$(IMAGE_TAG) 2>/dev/null || true
-	-$(DOCKER) rmi $(IMAGE_REGISTRY)/redis-worker:$(IMAGE_TAG) 2>/dev/null || true
-	-$(DOCKER) rmi $(IMAGE_REGISTRY)/scaler-controller:$(IMAGE_TAG) 2>/dev/null || true
+.PHONY: tear-down
+tear-down: ## Completely wipe the environment from the Pi
+	$(KUBECTL) delete namespace $(NAMESPACE) --ignore-not-found=true

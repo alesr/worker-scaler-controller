@@ -1,28 +1,36 @@
 # syntax=docker/dockerfile:1
-FROM golang:1.26-alpine AS base
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS base
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 
-
-FROM base AS builder
+FROM --platform=$BUILDPLATFORM base AS builder
 COPY . .
 
-RUN CGO_ENABLED=0 GOOS=linux go build -o /bin/controller ./cmd/controller/main.go
-RUN CGO_ENABLED=0 GOOS=linux go build -o /bin/producer ./cmd/producer/main.go
-RUN CGO_ENABLED=0 GOOS=linux go build -o /bin/worker ./cmd/worker/main.go
+ARG TARGETOS
+ARG TARGETARCH
 
-FROM alpine:latest AS controller
-WORKDIR /root/
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -o /bin/controller ./cmd/controller/main.go
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -o /bin/producer ./cmd/producer/main.go
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -o /bin/worker ./cmd/worker/main.go
+
+# scaler controller
+FROM gcr.io/distroless/static-debian12 AS controller
+WORKDIR /
 COPY --from=builder /bin/controller /bin/controller
-CMD ["/bin/controller"]
+USER nonroot:nonroot
+ENTRYPOINT ["/bin/controller"]
 
-FROM alpine:latest AS producer
-WORKDIR /root/
-COPY --from=builder /bin/producer .
-CMD ["./producer"]
+# redis streams producer
+FROM gcr.io/distroless/static-debian12 AS producer
+WORKDIR /
+COPY --from=builder /bin/producer /bin/producer
+USER nonroot:nonroot
+ENTRYPOINT ["/bin/producer"]
 
-FROM alpine:latest AS worker
-WORKDIR /root/
-COPY --from=builder /bin/worker .
-CMD ["./worker"]
+# worker
+FROM gcr.io/distroless/static-debian12 AS worker
+WORKDIR /
+COPY --from=builder /bin/worker /bin/worker
+USER nonroot:nonroot
+ENTRYPOINT ["/bin/worker"]
