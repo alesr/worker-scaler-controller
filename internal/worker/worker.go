@@ -3,6 +3,8 @@ package worker
 import (
 	"context"
 	"log/slog"
+	"math/rand"
+	"time"
 
 	"github.com/alesr/worker-scaler-controller/internal/pkg/contexutil"
 	"github.com/alesr/workerpool"
@@ -26,6 +28,11 @@ func (w WorkerTask) Do(ctx context.Context) {
 
 	logger.Info("Processing task", "id", w.ID)
 
+	// simulate some work
+	sleepTime := time.Duration(rand.Intn(8)+3) * time.Second
+	time.Sleep(sleepTime)
+
+	logger.Info("Attempting to ACK task", "id", w.ID)
 	if err := w.Ack(); err != nil {
 		logger.Error("Failed to ack task", "id", w.ID, "error", err)
 		return
