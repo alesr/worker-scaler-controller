@@ -9,12 +9,11 @@ spec:
     metadata:
       labels:
         app: redis-producer
-        namespace: worker-scaler
     spec:
       containers:
         - name: producer
-          image: local/redis-producer:v1
-          imagePullPolicy: IfNotPresent
+          image: docker.io/alesr/redis-producer:v1
+          imagePullPolicy: Always
           env:
             - name: REDIS_ADDR
               value: "redis:6379"

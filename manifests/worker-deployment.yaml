@@ -10,25 +10,31 @@ spec:
   selector:
     matchLabels:
       app: redis-worker
-  terminationGracePeriodSeconds: 60
   template:
     metadata:
-      namespace: worker-scaler
       labels:
         app: redis-worker
     spec:
+      terminationGracePeriodSeconds: 60
       containers:
         - name: worker
-          image: local/redis-worker:v1
-          imagePullPolicy: IfNotPresent
+          image: docker.io/alesr/redis-worker:1780001755
+          imagePullPolicy: Always
           env:
             - name: REDIS_ADDR
               value: "redis:6379"
+              # changing the number of goroutines in the workerpool
+              # should be followed be an increment in the number of desidered
+              # tasks per worker (in pods) in the controller deployment manifest
+              # to avoid over/under provisioning
+            - name: WORKER_CONCURRENCY
+              value: "10"
+            - name: POOL_BUFFER_SIZE
+              value: "100"
           resources:
             limits:
               memory: "128Mi"
               cpu: "250m"
-
           livenessProbe:
             exec:
               command: ["/bin/true"] # todo: implement healthcheck

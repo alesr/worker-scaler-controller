@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scaler-controller
+  namespace: worker-scaler
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: scaler-controller
+  template:
+    metadata:
+      labels:
+        app: scaler-controller
+    spec:
+      serviceAccountName: scaler-controller
+      containers:
+        - name: controller
+          image: docker.io/alesr/scaler-controller:1780001755
+          imagePullPolicy: Always
+          env:
+            - name: REDIS_ADDR
+              value: "redis:6379"
+            - name: SYNC_PERIOD
+              value: "5s"
+              # keep this in sync with redis-worker's WORKER_CONCURRENCY
+              # current ratio: ~3.5x concurrency
+            - name: TASKS_PER_WORKER
+              value: "35"
+            - name: MAX_WORKERS
+              value: "5"
+            - name: K8S_NAMESPACE
+              value: "worker-scaler"
