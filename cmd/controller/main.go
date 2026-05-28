@@ -31,6 +31,11 @@ type config struct {
 	K8sNamespace     string        `env:"K8S_NAMESPACE" envDefault:"default"`
 }
 
+type controllerState struct {
+	lastScaleUpTime time.Time
+	cooldownPeriod  time.Duration
+}
+
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -60,6 +65,7 @@ func main() {
 	defer rdb.Close()
 
 	k8sScaler := scaler.New(clientset, cfg.K8sNamespace)
+	state := &controllerState{cooldownPeriod: 30 * time.Second}
 
 	logger.Info("Scaler Controller started", "sync_period", cfg.SyncPeriod, "target", cfg.TargetDeployment)
 
@@ -72,44 +78,53 @@ func main() {
 			logger.Info("Shutting down controller")
 			return
 		case <-ticker.C:
-			reconcile(ctx, logger, rdb, k8sScaler, cfg)
+			reconcile(ctx, logger, rdb, k8sScaler, cfg, state)
 		}
 	}
 }
 
-func reconcile(ctx context.Context, logger *slog.Logger, rdb *redis.Client, s *scaler.Scaler, cfg config) {
-	var backlog int64
+func reconcile(ctx context.Context, logger *slog.Logger, rdb *redis.Client, s *scaler.Scaler, cfg config, state *controllerState) {
+	logger.Debug("Reconciling state...")
 
-	// fetch consumer group stats
+	var backlog int64
 	groups, err := rdb.XInfoGroups(ctx, cfg.StreamName).Result()
 	if err == nil {
 		for _, g := range groups {
 			if g.Name == cfg.GroupName {
-				// backlog = active processing + waiting
 				backlog = g.Pending + g.Lag
+				logger.Debug("Calculated backlog", "backlog", backlog)
 				break
 			}
 		}
-	} else {
-		logger.Debug("Could not fetch group info (stream might be empty)", "error", err)
 	}
 
 	desiredReplicas := calculateReplicas(backlog, cfg.TasksPerWorker, cfg.MaxWorkers)
 
+	scale, err := s.GetScale(ctx, cfg.TargetDeployment)
+	if err != nil {
+		logger.Error("Could not get scale", "error", err)
+		return
+	}
+
+	currentReplicas := scale.Spec.Replicas
+
+	if desiredReplicas < currentReplicas {
+		if time.Since(state.lastScaleUpTime) < state.cooldownPeriod {
+			logger.Debug("Cooldown active, skipping scale-down")
+			return
+		}
+	} else if desiredReplicas > currentReplicas {
+		state.lastScaleUpTime = time.Now()
+	}
+
 	oldReplicas, err := s.ScaleDeployment(ctx, cfg.TargetDeployment, desiredReplicas)
 	if err != nil {
-		logger.Error("Failed to scale deployment", "deployment", cfg.TargetDeployment, "error", err)
+		logger.Error("Failed to scale deployment", "error", err)
 		return
 	}
 
 	if oldReplicas != desiredReplicas {
-		logger.Info(
-			"Deployment scaled successfully",
-			"deployment", cfg.TargetDeployment,
-			"backlog", backlog,
-			"from_replicas", oldReplicas,
-			"to_replicas", desiredReplicas,
-		)
+		logger.Debug("Deployment scaled successfully", "from", oldReplicas, "to", desiredReplicas)
 	}
 }
 
