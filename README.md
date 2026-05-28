@@ -21,17 +21,14 @@ This implementation bridges K8s orchestration with application-level concurrency
 
 ## Workflow: The Scaling Lab
 
-Spin up the infrastructure locally to test the controller's behavior under load.
+This project is configured to deploy directly to a remote K3s cluster (in my case Raspberry Pi 4) isolated within the `worker-scaler` namespace.
 
 ### 1. Boot the Environment
 
-```bash
-# create the local cluster
-kind create cluster --name worker-scaler
+Ensure your `KUBECONFIG` is pointing to your remote cluster, then execute the full pipeline. This will build the cross-platform images, push them to your registry, create the namespace, and apply all manifests:
 
-# deploy Redis and the baseline worker
-make deploy-redis
-make deploy-worker
+```bash
+make deploy-all
 ```
 
 ### 2. Inject Load (Simulation)
@@ -39,17 +36,20 @@ make deploy-worker
 To test how the autoscaler reacts, we need to simulate traffic. The producer component floods the stream with synthetic tasks, artificially inflating the `Lag` and `Pending` metrics so we can watch the controller trigger scale-up events in real time:
 
 ```bash
-make run-producer
+    kubectl apply -n worker-scaler -f manifests/producer-job.yaml
 ```
 
 ### 3. Introspection
 
 ```bash
-# watch worker activity
-kubectl logs -l app=redis-worker --tail=-1 -f
+# watch the controller logs to see scaling
+kubectl logs -n worker-scaler -l app=scaler-controller -f
 
-# inspect raw stream data
-kubectl exec -it deployment/redis -- redis-cli XREAD COUNT 5 STREAMS orders_stream 0-0
+# worker activity
+kubectl logs -n worker-scaler -l app=redis-worker --tail=-1 -f
+
+# inspect stream data
+kubectl exec -n worker-scaler -it deployment/redis -- redis-cli XINFO GROUPS orders_stream
 ```
 
 ---
