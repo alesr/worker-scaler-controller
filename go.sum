@@ -1,3 +1,5 @@
+github.com/alesr/autoscaler-engine v0.0.0-20260529221428-fdcfd13a5c6f h1:dofoFPehgWOFPNyDEWfuwEbgjD3YjPDaCVGAf8v+KvM=
+github.com/alesr/autoscaler-engine v0.0.0-20260529221428-fdcfd13a5c6f/go.mod h1:Wxc5BnOLDGxiADirTbcXKbN2d0rFxt1cpOVvNkYt5pw=
 github.com/alesr/workerpool v1.0.0 h1:gZI7T7npXiD8RnD7WHFzR3FszYkiVVMpC/O6YqOhKnk=
 github.com/alesr/workerpool v1.0.0/go.mod h1:FEAxA4neUreRIYou11sl9x2Cmys+Ah7YDl+2vefEv2Q=
 github.com/alesr/workerpool/adapters/redisstreams v0.0.0-20260527180839-781a462fcf7b h1:eqTHQtPd0A/LugXfjrGp7u7D6zBCGwcxKwao+QjtOQM=
@@ -75,8 +77,8 @@ github.com/onsi/gomega v1.31.0 h1:54UJxxj6cPInHS3a35wm6BK/F9nHYueZ1NVujHDrnXE=
 github.com/onsi/gomega v1.31.0/go.mod h1:DW9aCi7U6Yi40wNVAvT6kzFnEVEI5n3DloYBiKiT6zk=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
-github.com/redis/go-redis/v9 v9.19.0 h1:XPVaaPSnG6RhYf7p+rmSa9zZfeVAnWsH5h3lxthOm/k=
-github.com/redis/go-redis/v9 v9.19.0/go.mod h1:v/M13XI1PVCDcm01VtPFOADfZtHf8YW3baQf57KlIkA=
+github.com/redis/go-redis/v9 v9.20.0 h1:WnQYxLkgO2xiXTCJY0ldIiI8dNqCDlQAG+AtaH7a2a0=
+github.com/redis/go-redis/v9 v9.20.0/go.mod h1:v/M13XI1PVCDcm01VtPFOADfZtHf8YW3baQf57KlIkA=
 github.com/rogpeppe/go-internal v1.10.0 h1:TMyTOH3F/DB16zRVcYyreMH6GnZZrwQVAoYjRBZyWFQ=
 github.com/rogpeppe/go-internal v1.10.0/go.mod h1:UQnix2H7Ngw/k4C5ijL5+65zddjncjaFoBhdsK/akog=
 github.com/spf13/pflag v1.0.5 h1:iy+VFUOCP1a+8yFto/drg2CJ5u0yRoB7fZw3DKv/JXA=

@@ -3,10 +3,11 @@ module github.com/alesr/worker-scaler-controller
 go 1.26.1
 
 require (
+	github.com/alesr/autoscaler-engine v0.0.0-20260529221428-fdcfd13a5c6f
 	github.com/alesr/workerpool v1.0.0
 	github.com/alesr/workerpool/adapters/redisstreams v0.0.0-20260527180839-781a462fcf7b
 	github.com/caarlos0/env/v11 v11.4.1
-	github.com/redis/go-redis/v9 v9.19.0
+	github.com/redis/go-redis/v9 v9.20.0
 	k8s.io/api v0.30.1
 	k8s.io/apimachinery v0.30.1
 	k8s.io/client-go v0.30.1
