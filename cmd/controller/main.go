@@ -1,4 +1,3 @@
-// cmd/controller/main.go
 package main
 
 import (
@@ -10,14 +9,18 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/alesr/autoscaler-engine/adapters"
 	"github.com/alesr/worker-scaler-controller/internal/pkg/logutil"
 	"github.com/alesr/worker-scaler-controller/internal/scaler"
+	"github.com/alesr/worker-scaler-controller/internal/workload"
 	"github.com/caarlos0/env/v11"
 	"github.com/redis/go-redis/v9"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
+
+	engine "github.com/alesr/autoscaler-engine"
 )
 
 type config struct {
@@ -29,11 +32,6 @@ type config struct {
 	MaxWorkers       int32         `env:"MAX_WORKERS" envDefault:"5"`
 	TargetDeployment string        `env:"TARGET_DEPLOYMENT" envDefault:"redis-worker"`
 	K8sNamespace     string        `env:"K8S_NAMESPACE" envDefault:"default"`
-}
-
-type controllerState struct {
-	lastScaleUpTime time.Time
-	cooldownPeriod  time.Duration
 }
 
 func main() {
@@ -63,9 +61,20 @@ func main() {
 
 	rdb := redis.NewClient(&redis.Options{Addr: cfg.RedisAddr})
 	defer rdb.Close()
-
 	k8sScaler := scaler.New(clientset, cfg.K8sNamespace)
-	state := &controllerState{cooldownPeriod: 30 * time.Second}
+
+	redisBacklogAdapter := adapters.NewRedisBacklog(rdb, cfg.StreamName, cfg.GroupName)
+
+	workloadAdapter := workload.NewK8s(k8sScaler, cfg.TargetDeployment)
+
+	engineCfg := engine.Config{
+		TasksPerWorker: cfg.TasksPerWorker,
+		MaxWorkers:     cfg.MaxWorkers,
+		MinWorkers:     1,
+		CooldownPeriod: 30 * time.Second,
+	}
+
+	autoscaler := engine.New(logger, redisBacklogAdapter, workloadAdapter, engineCfg)
 
 	logger.Info("Scaler Controller started", "sync_period", cfg.SyncPeriod, "target", cfg.TargetDeployment)
 
@@ -78,83 +87,22 @@ func main() {
 			logger.Info("Shutting down controller")
 			return
 		case <-ticker.C:
-			reconcile(ctx, logger, rdb, k8sScaler, cfg, state)
-		}
-	}
-}
-
-func reconcile(ctx context.Context, logger *slog.Logger, rdb *redis.Client, s *scaler.Scaler, cfg config, state *controllerState) {
-	logger.Debug("Reconciling state...")
-
-	var backlog int64
-	groups, err := rdb.XInfoGroups(ctx, cfg.StreamName).Result()
-	if err == nil {
-		for _, g := range groups {
-			if g.Name == cfg.GroupName {
-				backlog = g.Pending + g.Lag
-				logger.Debug("Calculated backlog", "backlog", backlog)
-				break
+			if err := autoscaler.Reconcile(ctx); err != nil {
+				// fine to just log error
+				// 1. we're watching the stream queue, not k8s
+				// 2. we retry in the next loop cycle
+				logger.Error("Reconciliation cycle failed", "error", err)
 			}
 		}
 	}
-
-	desiredReplicas := calculateReplicas(backlog, cfg.TasksPerWorker, cfg.MaxWorkers)
-
-	scale, err := s.GetScale(ctx, cfg.TargetDeployment)
-	if err != nil {
-		logger.Error("Could not get scale", "error", err)
-		return
-	}
-
-	currentReplicas := scale.Spec.Replicas
-
-	if desiredReplicas < currentReplicas {
-		if time.Since(state.lastScaleUpTime) < state.cooldownPeriod {
-			logger.Debug("Cooldown active, skipping scale-down")
-			return
-		}
-	} else if desiredReplicas > currentReplicas {
-		state.lastScaleUpTime = time.Now()
-	}
-
-	oldReplicas, err := s.ScaleDeployment(ctx, cfg.TargetDeployment, desiredReplicas)
-	if err != nil {
-		logger.Error("Failed to scale deployment", "error", err)
-		return
-	}
-
-	if oldReplicas != desiredReplicas {
-		logger.Debug("Deployment scaled successfully", "from", oldReplicas, "to", desiredReplicas)
-	}
-}
-
-func calculateReplicas(backlog int64, tasksPerWorker int64, maxWorkers int32) int32 {
-	// calculate the required workers
-	desired := backlog / tasksPerWorker
-	if backlog%tasksPerWorker != 0 {
-		desired++
-	}
-
-	// "MinReplicas" constraint
-	if desired < 1 {
-		desired = 1
-	}
-
-	// "MaxWorkers" constraint
-	if desired > int64(maxWorkers) {
-		desired = int64(maxWorkers)
-	}
-	return int32(desired)
 }
 
 func getK8sConfig() (*rest.Config, error) {
-	// check if running inside a Cluster pod
 	config, err := rest.InClusterConfig()
 	if err == nil {
 		return config, nil
 	}
 
-	// fallback: compile out-of-cluster config using standard local Kubeconfig
 	var kubeconfig string
 	if home := homedir.HomeDir(); home != "" {
 		kubeconfig = filepath.Join(home, ".kube", "config")
